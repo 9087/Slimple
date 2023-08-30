@@ -12,12 +12,13 @@ namespace Slimple.Editor.UI
     public class TextEditor : GraphicEditor
     {
         private SerializedProperty m_Text;
+        private SerializedProperty m_TextPropertyData;
         private SerializedProperty m_Font;
         private SerializedProperty m_FontStyle;
         private SerializedProperty m_FontSize;
         private SerializedProperty m_Direction;
         private SerializedProperty m_Alignment;
-        private SerializedProperty m_HorizontalWrapMode;
+        private SerializedProperty m_HorizontalOverflow;
         private SerializedProperty m_VerticalOverflow;
         
         private GUIContent m_LeftAlignText;
@@ -32,20 +33,20 @@ namespace Slimple.Editor.UI
         private GUIContent m_UpperAlignTextActive;
         private GUIContent m_MiddleAlignTextActive;
         private GUIContent m_LowerAlignTextActive;
-
-        private bool m_Debugging = false;
         
         protected override void OnEnable()
         {
             base.OnEnable();
             m_Text = serializedObject.FindProperty(nameof(m_Text));
-            m_Font = serializedObject.FindProperty(nameof(m_Font));
-            m_FontStyle = serializedObject.FindProperty(nameof(m_FontStyle));
-            m_FontSize = serializedObject.FindProperty(nameof(m_FontSize));
-            m_Alignment = serializedObject.FindProperty(nameof(m_Alignment));
-            m_HorizontalWrapMode = serializedObject.FindProperty(nameof(m_HorizontalWrapMode));
-            m_VerticalOverflow = serializedObject.FindProperty(nameof(m_VerticalOverflow));
-            m_Direction = serializedObject.FindProperty(nameof(m_Direction));
+            
+            m_TextPropertyData = serializedObject.FindProperty(nameof(m_TextPropertyData));
+            m_Font = m_TextPropertyData.FindPropertyRelative(nameof(m_Font));
+            m_FontStyle = m_TextPropertyData.FindPropertyRelative(nameof(m_FontStyle));
+            m_FontSize = m_TextPropertyData.FindPropertyRelative(nameof(m_FontSize));
+            m_Alignment = m_TextPropertyData.FindPropertyRelative(nameof(m_Alignment));
+            m_HorizontalOverflow = m_TextPropertyData.FindPropertyRelative(nameof(m_HorizontalOverflow));
+            m_VerticalOverflow = m_TextPropertyData.FindPropertyRelative(nameof(m_VerticalOverflow));
+            m_Direction = m_TextPropertyData.FindPropertyRelative(nameof(m_Direction));
 
             // Horizontal Alignment Icons
             m_LeftAlignText = EditorGUIUtility.IconContent(@"GUISystem/align_horizontally_left", "Left Align");
@@ -142,7 +143,7 @@ namespace Slimple.Editor.UI
                     EditorGUIUtility.SetIconSize(Vector2.zero);
                 }
                 
-                EditorGUILayout.PropertyField(m_HorizontalWrapMode);
+                EditorGUILayout.PropertyField(m_HorizontalOverflow);
                 EditorGUILayout.PropertyField(m_VerticalOverflow);
             }
             EditorGUI.indentLevel--;
@@ -158,18 +159,6 @@ namespace Slimple.Editor.UI
             RaycastControlsGUI();
             MaskableControlsGUI();
             serializedObject.ApplyModifiedProperties();
-
-            m_Debugging = EditorGUILayout.Foldout(m_Debugging, new GUIContent("Debug"), true);
-            EditorGUI.indentLevel++;
-            if (m_Debugging)
-            {
-                EditorGUILayout.LabelField("Atlases");
-                foreach (var (_, atlas) in Atlas.atlases)
-                {
-                    EditorGUILayout.ObjectField(atlas.texture, typeof(Texture), allowSceneObjects: true);  
-                } 
-            }
-            EditorGUI.indentLevel--;
         }
     }
 }

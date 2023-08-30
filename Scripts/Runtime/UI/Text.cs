@@ -4,6 +4,7 @@ using System.Globalization;
 using Slimple.Core;
 using UnityEngine;
 using UnityEngine.Pool;
+using UnityEngine.Serialization;
 using UnityEngine.TextCore;
 using UnityEngine.UI;
 using CharacterInfo = Slimple.Core.CharacterInfo;
@@ -33,6 +34,10 @@ namespace Slimple.UI
 
         #region Properties
         
+        [SerializeField]
+        [FormerlySerializedAs("m_FontData")]
+        private TextPropertyData m_TextPropertyData = TextPropertyData.defaultFontData;
+        
         #region Text
         
         [TextArea(3, 10)][SerializeField] private string m_Text;
@@ -54,15 +59,13 @@ namespace Slimple.UI
         #endregion
         
         #region Font
-        
-        [SerializeField] private Font m_Font;
 
         public Font font
         {
-            get => m_Font;
+            get => m_TextPropertyData.m_Font;
             set
             {
-                if (!SetProperty(ref m_Font, value))
+                if (!SetProperty(ref m_TextPropertyData.m_Font, value))
                 {
                     return;
                 }
@@ -74,14 +77,12 @@ namespace Slimple.UI
 
         #region FontStyle
         
-        [SerializeField] private FontStyle m_FontStyle;
-
         public FontStyle fontStyle
         {
-            get => m_FontStyle;
+            get => m_TextPropertyData.m_FontStyle;
             set
             {
-                if (!SetProperty(ref m_FontStyle, value))
+                if (!SetProperty(ref m_TextPropertyData.m_FontStyle, value))
                 {
                     return;
                 }
@@ -92,15 +93,13 @@ namespace Slimple.UI
         #endregion
 
         #region FontSize
-        
-        [SerializeField] private int m_FontSize = 14;
 
         public int fontSize
         {
-            get => m_FontSize;
+            get => m_TextPropertyData.m_FontSize;
             set
             {
-                if (!SetProperty(ref m_FontSize, value))
+                if (!SetProperty(ref m_TextPropertyData.m_FontSize, value))
                 {
                     return;
                 }
@@ -111,15 +110,13 @@ namespace Slimple.UI
         #endregion
 
         #region Alignment
-
-        [SerializeField] private TextAnchor m_Alignment;
         
         public TextAnchor alignment
         {
-            get => m_Alignment;
+            get => m_TextPropertyData.m_Alignment;
             set
             {
-                if (!SetProperty(ref m_Alignment, value))
+                if (!SetProperty(ref m_TextPropertyData.m_Alignment, value))
                 {
                     return;
                 }
@@ -131,14 +128,12 @@ namespace Slimple.UI
 
         #region HorizontalOverflow
         
-        [SerializeField] private HorizontalWrapMode m_HorizontalWrapMode;
-        
         public HorizontalWrapMode horizontalOverflow
         {
-            get => m_HorizontalWrapMode;
+            get => m_TextPropertyData.m_HorizontalOverflow;
             set
             {
-                if (!SetProperty(ref m_HorizontalWrapMode, value))
+                if (!SetProperty(ref m_TextPropertyData.m_HorizontalOverflow, value))
                 {
                     return;
                 }
@@ -150,14 +145,12 @@ namespace Slimple.UI
 
         #region VerticalOverflow
         
-        [SerializeField] private VerticalWrapMode m_VerticalOverflow;
-
         public VerticalWrapMode verticalOverflow
         {
-            get => m_VerticalOverflow;
+            get => m_TextPropertyData.m_VerticalOverflow;
             set
             {
-                if (!SetProperty(ref m_VerticalOverflow, value))
+                if (!SetProperty(ref m_TextPropertyData.m_VerticalOverflow, value))
                 {
                     return;
                 }
@@ -168,21 +161,13 @@ namespace Slimple.UI
         #endregion
 
         #region Direction
-
-        public enum Direction
-        {
-            Horizontal = 0,
-            Vertical = 1,
-        }
         
-        [SerializeField] private Direction m_Direction;
-
-        public Direction direction
+        public TextDirection direction
         {
-            get => m_Direction;
+            get => m_TextPropertyData.m_Direction;
             set
             {
-                if (!SetProperty(ref m_Direction, value))
+                if (!SetProperty(ref m_TextPropertyData.m_Direction, value))
                 {
                     return;
                 }
@@ -217,7 +202,7 @@ namespace Slimple.UI
 
         #region Font
 
-        private static Dictionary<FontData, FaceInfo> s_FaceInfos = new();
+        private static readonly Dictionary<FontData, FaceInfo> s_FaceInfos = new();
 
         private static FaceInfo GetFaceInfo(FontData fontData)
         {
@@ -230,9 +215,7 @@ namespace Slimple.UI
             return faceInfo;
         }
 
-        internal FontData fontData => new FontData {font = m_Font != null ? m_Font : Resources.GetBuiltinResource<Font>("Arial.ttf"), pointSize = 64, padding = 5};
-
-        internal FaceInfo faceInfo => GetFaceInfo(fontData);
+        private FaceInfo faceInfo => GetFaceInfo(m_TextPropertyData.fontData);
 
         #endregion
         
@@ -247,7 +230,7 @@ namespace Slimple.UI
             for (int i = 0; m_Text != null && i < m_Text.Length; i++)
             {
                 uint unicode = (uint)m_Text[i];
-                var characterInfo = Atlas.GetOrCreateCharacterInfo(fontData, unicode);
+                var characterInfo = Atlas.GetOrCreateCharacterInfo(m_TextPropertyData.fontData, unicode);
                 characterInfo.Retain();
                 m_CharacterInfos.Add(characterInfo);   
             }
@@ -314,10 +297,10 @@ namespace Slimple.UI
                 Descriptor typographyWalkingDescriptor;
                 switch (textComponent.direction)
                 {
-                    case Direction.Horizontal:
+                    case TextDirection.Horizontal:
                         typographyWalkingDescriptor = s_Descriptor[WalkingStyle.Horizontal];
                         break;
-                    case Direction.Vertical:
+                    case TextDirection.Vertical:
                         typographyWalkingDescriptor = s_Descriptor[WalkingStyle.Vertical];
                         break;
                     default:
@@ -327,7 +310,7 @@ namespace Slimple.UI
                 Color32 color32 = textComponent.color;
                 var font = textComponent.font;
                 var faceInfo = textComponent.faceInfo;
-                var fontData = textComponent.fontData;
+                var fontData = textComponent.m_TextPropertyData.fontData;
                 Vector2 startPosition = rect.position + rect.size * typographyWalkingDescriptor.pivot;
                 Vector2 endPosition = rect.position + rect.size * (Vector2.one - typographyWalkingDescriptor.pivot);
                 Vector2 currentPosition = startPosition;
@@ -349,10 +332,10 @@ namespace Slimple.UI
                     Descriptor characterWalkingDescriptor;
                     switch (textComponent.direction)
                     {
-                        case Direction.Horizontal:
+                        case TextDirection.Horizontal:
                             characterWalkingDescriptor = s_Descriptor[WalkingStyle.Horizontal];
                             break;
-                        case Direction.Vertical:
+                        case TextDirection.Vertical:
                             characterWalkingDescriptor = s_Descriptor[cjk ? WalkingStyle.Horizontal : WalkingStyle.Vertical];
                             break;
                         default:
@@ -428,7 +411,7 @@ namespace Slimple.UI
             material.mainTexture = texture;
             material.SetFloat("_MainTexWidth", texture.width);
             material.SetFloat("_MainTexHeight", texture.height);
-            material.SetFloat("_Padding", fontData.padding);
+            material.SetFloat("_Padding", m_TextPropertyData.fontData.padding);
             canvasRenderer.SetMaterial(material, 0);
             canvasRenderer.SetTexture(texture);
         }
