@@ -126,7 +126,7 @@ namespace Slimple.Core
     
     public partial class Atlas
     {
-        private static Dictionary<CharacterData, CharacterInfo> m_CharacterInfos = new();
+        private static readonly Dictionary<CharacterData, CharacterInfo> s_CharacterInfos = new();
         
         private readonly Dictionary<GlyphData, GlyphInfo> m_GlyphInfos = new();
 
@@ -138,9 +138,10 @@ namespace Slimple.Core
         
         public static CharacterInfo GetOrCreateCharacterInfo(CharacterData characterData)
         {
-            if (!m_CharacterInfos.TryGetValue(characterData, out var characterInfo))
+            if (!s_CharacterInfos.TryGetValue(characterData, out var characterInfo))
             {
                 var fontData = characterData.fontData;
+                
                 if (FontEngineError.Success == FontEngine.LoadFontFace(fontData.font, fontData.pointSize) &&
                     FontEngine.TryGetGlyphIndex(characterData.unicode, out var glyphIndex))
                 {
@@ -171,14 +172,14 @@ namespace Slimple.Core
                 {
                     characterInfo = new CharacterInfo(characterData, null);
                 }
-                m_CharacterInfos.Add(characterData, characterInfo);
+                s_CharacterInfos.Add(characterData, characterInfo);
             }
             return characterInfo;
         }
 
         internal static void RemoveCharacterInfo(CharacterInfo characterInfo)
         {
-            m_CharacterInfos.Remove(characterInfo.characterData);
+            s_CharacterInfos.Remove(characterInfo.characterData);
         }
         
         public GlyphInfo GetOrCreateGlyphInfo(FontData fontData, uint glyphIndex)

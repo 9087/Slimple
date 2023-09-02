@@ -91,7 +91,7 @@ namespace Slimple.UI
             set { m_Font = value; }
         }
 
-        internal FontData fontData => new FontData {font = m_Font != null ? m_Font : Resources.GetBuiltinResource<Font>("Arial.ttf"), pointSize = 64, padding = 5};
+        internal FontData fontData => new FontData {font = m_Font, pointSize = 64, padding = 5};
 
         public int fontSize
         {

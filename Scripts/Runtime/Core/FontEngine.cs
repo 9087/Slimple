@@ -13,8 +13,12 @@ namespace Slimple.Core
         #region LoadFontFace
 
         public static FontEngineError LoadFontFace(Font font, int pointSize)
-        {            
-            return UnityEngine.TextCore.LowLevel.FontEngine.LoadFontFace(font, pointSize);
+        {
+            if (FontEngineError.Success == UnityEngine.TextCore.LowLevel.FontEngine.LoadFontFace(font, pointSize))
+            {
+                return FontEngineError.Success;
+            }
+            return UnityEngine.TextCore.LowLevel.FontEngine.LoadFontFace("Arial", "", pointSize);
         }
 
         #endregion

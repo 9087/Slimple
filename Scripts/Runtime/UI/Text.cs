@@ -308,7 +308,6 @@ namespace Slimple.UI
                 }
                 
                 Color32 color32 = textComponent.color;
-                var font = textComponent.font;
                 var faceInfo = textComponent.faceInfo;
                 var fontData = textComponent.m_TextPropertyData.fontData;
                 Vector2 startPosition = rect.position + rect.size * typographyWalkingDescriptor.pivot;
@@ -349,11 +348,16 @@ namespace Slimple.UI
                                                  Abs(characterSize.x * characterWalkingDescriptor.first + characterSize.y * characterWalkingDescriptor.second);
 
                     var nextPosition = GetNextPosition();
-                    var overflow = (nextPosition - endPosition) * typographyWalkingDescriptor.first;
-                    if (overflow.x + overflow.y > 0)
+                    var firstOverflow = Vector2.Dot(nextPosition - endPosition, typographyWalkingDescriptor.first);
+                    if (textComponent.horizontalOverflow == HorizontalWrapMode.Wrap && firstOverflow > 0)
                     {
                         currentPosition = startPosition * Abs(typographyWalkingDescriptor.first) + currentPosition * Abs(typographyWalkingDescriptor.second) + fontScale * faceInfo.lineHeight * typographyWalkingDescriptor.second;
                         nextPosition = GetNextPosition();
+                    }
+                    var secondOverflow = Vector2.Dot(nextPosition - endPosition, typographyWalkingDescriptor.second);
+                    if (textComponent.verticalOverflow == VerticalWrapMode.Truncate && secondOverflow > -fontScale * faceInfo.lineHeight)
+                    {
+                        break;
                     }
                     
                     var glyphSize = new Vector2(glyphRect.width, glyphRect.height);
