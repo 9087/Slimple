@@ -65,6 +65,8 @@ namespace Slimple.Core
         
         public GlyphRect glyphRect { get; }
 
+        public Atlas atlas => m_Atlas.TryGetTarget(out var o) ? o : null;
+
         internal GlyphInfo(Atlas atlas, GlyphData glyphData, Glyph glyph, GlyphRect glyphRect)
         {
             this.m_Atlas = new(atlas);

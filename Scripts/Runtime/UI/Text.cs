@@ -1,7 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using Slimple.Core;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 using UnityEngine;
 using UnityEngine.Pool;
 using UnityEngine.Serialization;
@@ -9,6 +13,7 @@ using UnityEngine.TextCore;
 using UnityEngine.UI;
 using CharacterInfo = Slimple.Core.CharacterInfo;
 using FontData = Slimple.Core.FontData;
+using Object = UnityEngine.Object;
 
 namespace Slimple.UI
 {
@@ -18,9 +23,34 @@ namespace Slimple.UI
         // Editor: Slime.Editor.UI.TextEditor
         : MaskableGraphic 
     {
+        #region Editor
+        #if UNITY_EDITOR
+        
+        [InitializeOnLoadMethod]
+        private static void InitializeOnLoad()
+        {
+            AssemblyReloadEvents.beforeAssemblyReload -= BeforeAssemblyReloading;
+            AssemblyReloadEvents.beforeAssemblyReload += BeforeAssemblyReloading;
+        }
+
+        private static void BeforeAssemblyReloading()
+        {
+            Text[] textComponents = FindObjectsOfType<Text>();
+            foreach (var textComponent in textComponents)
+            {
+                foreach (var subordinate in textComponent.m_Subordinates)
+                {
+                    Object.DestroyImmediate(subordinate.gameObject);
+                }
+            }
+        }
+
+        #endif
+        #endregion
+        
         #region Utility
 
-        protected bool SetProperty<T>(ref T currentValue, T newValue)
+        private bool SetProperty<T>(ref T currentValue, T newValue)
         {
             if ((currentValue == null && newValue == null) || (currentValue != null && currentValue.Equals(newValue)))
             {
@@ -252,6 +282,24 @@ namespace Slimple.UI
 
         #endregion
 
+        #region Mesh Info
+
+        internal class VertexInfo
+        {
+            public Vector3 position;
+            public Color32 color;
+            public Vector2 uv0;
+
+            public VertexInfo(Vector3 position, Color32 color, Vector2 uv0)
+            {
+                this.position = position;
+                this.color = color;
+                this.uv0 = uv0;
+            }
+        }
+
+        #endregion
+
         #region Typography
 
         public class Typography
@@ -292,8 +340,13 @@ namespace Slimple.UI
                 return new Vector2(Mathf.Abs(value.x), Mathf.Abs(value.y));
             }
             
-            public Rect Set(Text textComponent, Rect rect, VertexHelper vh)
+            internal Rect Set(Text textComponent, Rect rect, Dictionary<int, List<VertexInfo>> allVertexInfos)
             {
+                foreach (var (_, vertexInfos) in allVertexInfos)
+                {
+                    ListPool<VertexInfo>.Release(vertexInfos);
+                }
+                allVertexInfos.Clear();
                 Descriptor typographyWalkingDescriptor;
                 switch (textComponent.direction)
                 {
@@ -373,51 +426,164 @@ namespace Slimple.UI
                     Vector2 v1 = v0 + fontScale * second;
                     Vector2 v2 = v1 + fontScale * first;
                     Vector2 v3 = v0 + fontScale * first;
-                    
-                    vh.AddVert(new Vector3(v0.x, v0.y, 0), color32, new Vector2(glyphRect.x, glyphRect.y + glyphRect.height));
-                    vh.AddVert(new Vector3(v1.x, v1.y, 0), color32, new Vector2(glyphRect.x, glyphRect.y));
-                    vh.AddVert(new Vector3(v2.x, v2.y, 0), color32, new Vector2(glyphRect.x + glyphRect.width, glyphRect.y));
-                    vh.AddVert(new Vector3(v3.x, v3.y, 0), color32, new Vector2(glyphRect.x + glyphRect.width, glyphRect.y + glyphRect.height));
-                    int offset = count * 4;
-                    vh.AddTriangle(offset + 0, offset + 1, offset + 2);
-                    vh.AddTriangle(offset + 2, offset + 3, offset + 0);
-                    
+
+                    var atlasID = glyphInfo.atlas.id;
+                    if (!allVertexInfos.TryGetValue(atlasID, out var vertexInfos))
+                    {
+                        vertexInfos = ListPool<VertexInfo>.Get();
+                        allVertexInfos[atlasID] = vertexInfos;
+                    }
+                    vertexInfos.Add(new VertexInfo(new Vector3(v0.x, v0.y, 0), color32, new Vector2(glyphRect.x, glyphRect.y + glyphRect.height)));
+                    vertexInfos.Add(new VertexInfo(new Vector3(v1.x, v1.y, 0), color32, new Vector2(glyphRect.x, glyphRect.y)));
+                    vertexInfos.Add(new VertexInfo(new Vector3(v2.x, v2.y, 0), color32, new Vector2(glyphRect.x + glyphRect.width, glyphRect.y)));
+                    vertexInfos.Add(new VertexInfo(new Vector3(v3.x, v3.y, 0), color32, new Vector2(glyphRect.x + glyphRect.width, glyphRect.y + glyphRect.height)));
                     currentPosition = nextPosition;
                     count++;
                 }
                 return rect;
             }
         }
-        
-        protected readonly Typography m_Typography = new();
+
+        private readonly Typography m_Typography = new();
 
         #endregion
+
+        #region Mesh & Material
         
-        protected override void OnPopulateMesh(VertexHelper vh)
+        [NonSerialized] private static readonly VertexHelper s_VertexHelper = new();
+        [NonSerialized] private int[] m_AtlasIDs = new int[0];
+        [NonSerialized] private RectTransform[] m_Subordinates = new RectTransform[0];
+        [NonSerialized] private DrivenRectTransformTracker m_Tracker;
+
+        private static void UpdateGeometry(Text textComponent, RectTransform transform, List<VertexInfo> vertexInfos)
         {
-            var r = GetPixelAdjustedRect();
-            vh.Clear();
-            TryRefreshCharacterInfos();
-            var preferredRect = m_Typography.Set(this, r, vh);
+            s_VertexHelper.Clear();
+            Debug.Assert(vertexInfos.Count % 4 == 0);
+            var quadCount = vertexInfos.Count / 4;
+            VertexInfo info;
+            for (int quadIndex = 0; quadIndex < quadCount; quadIndex++)
+            {
+                int offset = quadIndex * 4;
+                info = vertexInfos[offset + 0]; s_VertexHelper.AddVert(info.position, info.color, info.uv0);
+                info = vertexInfos[offset + 1]; s_VertexHelper.AddVert(info.position, info.color, info.uv0);
+                info = vertexInfos[offset + 2]; s_VertexHelper.AddVert(info.position, info.color, info.uv0);
+                info = vertexInfos[offset + 3]; s_VertexHelper.AddVert(info.position, info.color, info.uv0);
+                s_VertexHelper.AddTriangle(offset + 0, offset + 1, offset + 2);
+                s_VertexHelper.AddTriangle(offset + 2, offset + 3, offset + 0);
+            }
+            var components = ListPool<Component>.Get();
+            transform.GetComponents(typeof(IMeshModifier), components);
+            for (var i = 0; i < components.Count; i++)
+            {
+                ((IMeshModifier)components[i]).ModifyMesh(s_VertexHelper);
+            }
+            ListPool<Component>.Release(components);
+            s_VertexHelper.FillMesh(workerMesh);
+            transform.GetComponent<CanvasRenderer>().SetMesh(workerMesh);
         }
 
+        protected override void UpdateGeometry()
+        {
+            if (rectTransform == null || rectTransform.rect.width < 0 || rectTransform.rect.height < 0)
+            {
+                base.UpdateGeometry();
+                return;
+            }
+            var allVertexInfos = DictionaryPool<int, List<VertexInfo>>.Get();
+            var r = GetPixelAdjustedRect();
+            TryRefreshCharacterInfos();
+            m_Typography.Set(this, r, allVertexInfos);
+            Array.Resize(ref m_AtlasIDs, allVertexInfos.Count);
+            for (int i = m_Subordinates.Length; i > allVertexInfos.Count - 1 && i > 0; i--)
+            {
+                Object.DestroyImmediate(m_Subordinates[i - 1].gameObject);
+                m_Subordinates[i - 1] = null;
+            }
+            if (allVertexInfos.Count - 1 != m_Subordinates.Length)
+            {
+                Array.Resize(ref m_Subordinates, Mathf.Max(allVertexInfos.Count - 1, 0));
+            }
+            for (int i = 0; i < m_Subordinates.Length; i++)
+            {
+                if (m_Subordinates[i] != null)
+                {
+                    continue;
+                }
+                var gameObject = new GameObject("Text Submesh");
+                gameObject.hideFlags = HideFlags.HideAndDontSave;
+                var rectTransform = gameObject.AddComponent<RectTransform>();
+                rectTransform.SetParent(this.transform);
+                gameObject.AddComponent<CanvasRenderer>();
+                rectTransform.anchorMin = Vector2.zero;
+                rectTransform.anchorMax = Vector2.one;
+                rectTransform.offsetMin = Vector2.zero;
+                rectTransform.offsetMax = Vector2.zero;
+                m_Tracker.Add(this, rectTransform, DrivenTransformProperties.All);
+                m_Subordinates[i] = rectTransform;
+            }
+            int index = 0;
+            foreach (var (atlasID, vertexInfos) in allVertexInfos)
+            {
+                var rectTransform = index == 0 ? this.transform as RectTransform : m_Subordinates[index - 1];
+                UpdateGeometry(this, rectTransform, vertexInfos);
+                if (m_AtlasIDs[index] != atlasID)
+                {
+                    m_AtlasIDs[index] = atlasID;
+                    if (!m_MaterialDirty || index > 0)
+                    {
+                        UpdateMaterial(this, rectTransform, atlasID);
+                    }
+                }
+                index++;
+            }
+            DictionaryPool<int, List<VertexInfo>>.Release(allVertexInfos);
+        }
+
+        protected override void OnPopulateMesh(VertexHelper vh) => throw new NotSupportedException();
+
+        private static readonly int s_MainTexWidth = Shader.PropertyToID("_MainTexWidth");
+        private static readonly int s_MainTexHeight = Shader.PropertyToID("_MainTexHeight");
+        private static readonly int s_Padding = Shader.PropertyToID("_Padding");
+        private bool m_MaterialDirty = false;
+
+        public override void SetMaterialDirty()
+        {
+            if (!IsActive())
+                return;
+            m_MaterialDirty = true;
+            base.SetMaterialDirty();
+        }
+
+        private static void UpdateMaterial(Text textComponent, RectTransform transform, int atlasID)
+        {
+            if (atlasID < 0)
+            {
+                return;
+            }
+            var canvasRenderer = transform.GetComponent<CanvasRenderer>();
+            canvasRenderer.materialCount = 1;
+            var texture = Atlas.atlases[atlasID].texture;
+            var material = new Material(Shader.Find("Slime/UI/Text")) { mainTexture = texture };
+            material.SetFloat(s_MainTexWidth, texture.width);
+            material.SetFloat(s_MainTexHeight, texture.height);
+            material.SetFloat(s_Padding, textComponent.m_TextPropertyData.fontData.padding);
+            canvasRenderer.SetMaterial(material, 0);
+            canvasRenderer.SetTexture(texture);
+        }
+        
         protected override void UpdateMaterial()
         {
             if (!IsActive())
                 return;
-            if (Atlas.atlases.Count == 0)
+            int index = 0;
+            foreach (var atlasID in m_AtlasIDs)
             {
-                return;
+                var rectTransform = index == 0 ? this.transform as RectTransform : m_Subordinates[index - 1];
+                UpdateMaterial(this, rectTransform, atlasID);
+                index++;
             }
-            canvasRenderer.materialCount = 1;
-            var texture = Atlas.atlases[0].texture;
-            var material = new Material(Shader.Find("Slime/UI/Text"));
-            material.mainTexture = texture;
-            material.SetFloat("_MainTexWidth", texture.width);
-            material.SetFloat("_MainTexHeight", texture.height);
-            material.SetFloat("_Padding", m_TextPropertyData.fontData.padding);
-            canvasRenderer.SetMaterial(material, 0);
-            canvasRenderer.SetTexture(texture);
         }
+
+        #endregion
     }
 }

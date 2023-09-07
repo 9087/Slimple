@@ -9,7 +9,7 @@ namespace Slimple.Core
         public static int Width { get; set; } = 512;
         public static int Height { get; set; } = 512;
         
-        private static Dictionary<int, Atlas> s_Atlases = new();
+        private static readonly Dictionary<int, Atlas> s_Atlases = new();
         private static int s_Current = 0;
 
         public static Dictionary<int, Atlas> atlases => s_Atlases;
