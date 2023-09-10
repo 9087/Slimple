@@ -56,6 +56,7 @@ Shader "Slime/UI/Text"
                 float4 position : POSITION;
                 float4 color    : COLOR;
                 float2 uv       : TEXCOORD0;
+                float4 property : TEXCOORD1;
             };
 
             struct Pixel
@@ -63,6 +64,7 @@ Shader "Slime/UI/Text"
                 float4 position : SV_POSITION;
                 float4 color    : COLOR;
                 float2 uv       : TEXCOORD0;
+                float4 property : TEXCOORD1;
             };
 
             sampler2D _MainTex;
@@ -76,6 +78,7 @@ Shader "Slime/UI/Text"
                 pixel.position = UnityObjectToClipPos(v.position);
                 pixel.color = v.color;
                 pixel.uv = v.uv / float2(_MainTexWidth, _MainTexHeight);
+                pixel.property = v.property;
                 return pixel;
             }
 
@@ -84,8 +87,10 @@ Shader "Slime/UI/Text"
                 const float sdf = tex2D(_MainTex, p.uv).a;
                 const float2 pixelSize = float2(ddx(p.uv.y), ddy(p.uv.y)) * _MainTexWidth * .75;
                 const float scale = rsqrt(dot(pixelSize, pixelSize)) * _Padding;
+                const float fontWeight = p.property.x;
+                const float edge = 0.5 - fontWeight;
                 const float bias = 0.5 / scale * 0.5;
-                return smoothstep(0.5 - bias, 0.5 + bias, sdf) * p.color;
+                return smoothstep(edge - bias, edge + bias, sdf) * p.color;
             }
             ENDCG
         }

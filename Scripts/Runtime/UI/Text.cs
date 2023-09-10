@@ -289,12 +289,14 @@ namespace Slimple.UI
             public Vector3 position;
             public Color32 color;
             public Vector2 uv0;
+            public Vector4 property;
 
-            public VertexInfo(Vector3 position, Color32 color, Vector2 uv0)
+            public VertexInfo(Vector3 position, Color32 color, Vector2 uv0, Vector4 property)
             {
                 this.position = position;
                 this.color = color;
                 this.uv0 = uv0;
+                this.property = property;
             }
         }
 
@@ -340,7 +342,7 @@ namespace Slimple.UI
                 return new Vector2(Mathf.Abs(value.x), Mathf.Abs(value.y));
             }
             
-            internal Rect Set(Text textComponent, Rect rect, Dictionary<int, List<VertexInfo>> allVertexInfos)
+            internal Rect Calculate(Text textComponent, Rect rect, Dictionary<int, List<VertexInfo>> allVertexInfos)
             {
                 foreach (var (_, vertexInfos) in allVertexInfos)
                 {
@@ -359,6 +361,13 @@ namespace Slimple.UI
                     default:
                         throw new NotImplementedException();
                 }
+                    
+                var fontStyle = textComponent.m_TextPropertyData.fontStyle;
+                var property = new Vector4(
+                    (fontStyle == FontStyle.Bold || fontStyle == FontStyle.BoldAndItalic) ? 0.1f : 0,
+                    0,
+                    0,
+                    0);
                 
                 Color32 color32 = textComponent.color;
                 var faceInfo = textComponent.faceInfo;
@@ -433,10 +442,11 @@ namespace Slimple.UI
                         vertexInfos = ListPool<VertexInfo>.Get();
                         allVertexInfos[atlasID] = vertexInfos;
                     }
-                    vertexInfos.Add(new VertexInfo(new Vector3(v0.x, v0.y, 0), color32, new Vector2(glyphRect.x, glyphRect.y + glyphRect.height)));
-                    vertexInfos.Add(new VertexInfo(new Vector3(v1.x, v1.y, 0), color32, new Vector2(glyphRect.x, glyphRect.y)));
-                    vertexInfos.Add(new VertexInfo(new Vector3(v2.x, v2.y, 0), color32, new Vector2(glyphRect.x + glyphRect.width, glyphRect.y)));
-                    vertexInfos.Add(new VertexInfo(new Vector3(v3.x, v3.y, 0), color32, new Vector2(glyphRect.x + glyphRect.width, glyphRect.y + glyphRect.height)));
+            
+                    vertexInfos.Add(new VertexInfo(new Vector3(v0.x, v0.y, 0), color32, new Vector2(glyphRect.x, glyphRect.y + glyphRect.height), property));
+                    vertexInfos.Add(new VertexInfo(new Vector3(v1.x, v1.y, 0), color32, new Vector2(glyphRect.x, glyphRect.y), property));
+                    vertexInfos.Add(new VertexInfo(new Vector3(v2.x, v2.y, 0), color32, new Vector2(glyphRect.x + glyphRect.width, glyphRect.y), property));
+                    vertexInfos.Add(new VertexInfo(new Vector3(v3.x, v3.y, 0), color32, new Vector2(glyphRect.x + glyphRect.width, glyphRect.y + glyphRect.height), property));
                     currentPosition = nextPosition;
                     count++;
                 }
@@ -455,6 +465,9 @@ namespace Slimple.UI
         [NonSerialized] private RectTransform[] m_Subordinates = new RectTransform[0];
         [NonSerialized] private DrivenRectTransformTracker m_Tracker;
 
+        private static readonly Vector4 s_DefaultTangent = new Vector4(1.0f, 0.0f, 0.0f, -1.0f);
+        private static readonly Vector3 s_DefaultNormal = Vector3.back;
+
         private static void UpdateGeometry(Text textComponent, RectTransform transform, List<VertexInfo> vertexInfos)
         {
             s_VertexHelper.Clear();
@@ -464,10 +477,10 @@ namespace Slimple.UI
             for (int quadIndex = 0; quadIndex < quadCount; quadIndex++)
             {
                 int offset = quadIndex * 4;
-                info = vertexInfos[offset + 0]; s_VertexHelper.AddVert(info.position, info.color, info.uv0);
-                info = vertexInfos[offset + 1]; s_VertexHelper.AddVert(info.position, info.color, info.uv0);
-                info = vertexInfos[offset + 2]; s_VertexHelper.AddVert(info.position, info.color, info.uv0);
-                info = vertexInfos[offset + 3]; s_VertexHelper.AddVert(info.position, info.color, info.uv0);
+                info = vertexInfos[offset + 0]; s_VertexHelper.AddVert(info.position, info.color, info.uv0, info.property, s_DefaultNormal, s_DefaultTangent);
+                info = vertexInfos[offset + 1]; s_VertexHelper.AddVert(info.position, info.color, info.uv0, info.property, s_DefaultNormal, s_DefaultTangent);
+                info = vertexInfos[offset + 2]; s_VertexHelper.AddVert(info.position, info.color, info.uv0, info.property, s_DefaultNormal, s_DefaultTangent);
+                info = vertexInfos[offset + 3]; s_VertexHelper.AddVert(info.position, info.color, info.uv0, info.property, s_DefaultNormal, s_DefaultTangent);
                 s_VertexHelper.AddTriangle(offset + 0, offset + 1, offset + 2);
                 s_VertexHelper.AddTriangle(offset + 2, offset + 3, offset + 0);
             }
@@ -492,7 +505,9 @@ namespace Slimple.UI
             var allVertexInfos = DictionaryPool<int, List<VertexInfo>>.Get();
             var r = GetPixelAdjustedRect();
             TryRefreshCharacterInfos();
-            m_Typography.Set(this, r, allVertexInfos);
+            m_Typography.Calculate(this, r, allVertexInfos);
+            this.canvas.additionalShaderChannels |= AdditionalCanvasShaderChannels.TexCoord1;
+            
             Array.Resize(ref m_AtlasIDs, allVertexInfos.Count);
             for (int i = m_Subordinates.Length; i > allVertexInfos.Count - 1 && i > 0; i--)
             {
