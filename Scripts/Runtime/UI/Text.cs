@@ -341,6 +341,39 @@ namespace Slimple.UI
             {
                 return new Vector2(Mathf.Abs(value.x), Mathf.Abs(value.y));
             }
+
+            private class Quad
+            {
+                public Vector2 v0;
+                public Vector2 v1;
+                public Vector2 v2;
+                public Vector2 v3;
+
+                public int r;
+
+                private ref Vector2 this[int index]
+                {
+                    get
+                    {
+                        index = (index % 4 + 4) % 4;
+                        switch (index)
+                        {
+                            case 0: return ref v0;
+                            case 1: return ref v1;
+                            case 2: return ref v2;
+                            case 3: return ref v3;
+                        }
+                        throw new ArgumentOutOfRangeException();
+                    }
+                }
+
+                public ref Vector2 lt => ref this[4 + 0 - r];
+                public ref Vector2 lb => ref this[4 + 1 - r];
+                public ref Vector2 rb => ref this[4 + 2 - r];
+                public ref Vector2 rt => ref this[4 + 3 - r];
+            }
+
+            private static readonly Quad s_Quad = new();
             
             internal Rect Calculate(Text textComponent, Rect rect, Dictionary<int, List<VertexInfo>> allVertexInfos)
             {
@@ -425,16 +458,16 @@ namespace Slimple.UI
                     var glyphSize = new Vector2(glyphRect.width, glyphRect.height);
                     var first = glyphSize.x * characterWalkingDescriptor.first;
                     var second = glyphSize.y * characterWalkingDescriptor.second;
-                    Vector2 v0 = currentPosition +
+                    s_Quad.v0 = currentPosition +
                                  fontScale *
                                  (
                                     characterWalkingDescriptor.first * (metrics.horizontalBearingX - fontData.padding) +
                                     characterWalkingDescriptor.second * (-metrics.horizontalBearingY + faceInfo.ascentLine - fontData.padding) +
                                     (characterWalkingDescriptor.pivot - typographyWalkingDescriptor.pivot) * Abs(metrics.horizontalAdvance * characterWalkingDescriptor.first + glyphSize.y * characterWalkingDescriptor.second)
                                  );
-                    Vector2 v1 = v0 + fontScale * second;
-                    Vector2 v2 = v1 + fontScale * first;
-                    Vector2 v3 = v0 + fontScale * first;
+                    s_Quad.v1 = s_Quad.v0 + fontScale * second;
+                    s_Quad.v2 = s_Quad.v1 + fontScale * first;
+                    s_Quad.v3 = s_Quad.v0 + fontScale * first;
 
                     var atlasID = glyphInfo.atlas.id;
                     if (!allVertexInfos.TryGetValue(atlasID, out var vertexInfos))
@@ -442,11 +475,21 @@ namespace Slimple.UI
                         vertexInfos = ListPool<VertexInfo>.Get();
                         allVertexInfos[atlasID] = vertexInfos;
                     }
+                    
+                    s_Quad.r = Mathf.RoundToInt(Vector2.Angle(characterWalkingDescriptor.first, typographyWalkingDescriptor.first) / 90);
+
+                    if (textComponent.fontStyle == FontStyle.Italic ||
+                        textComponent.fontStyle == FontStyle.BoldAndItalic)
+                    {
+                        var offset = (s_Quad.lt - s_Quad.lb).magnitude * Mathf.Sin(20 * Mathf.PI / 180) * typographyWalkingDescriptor.first;
+                        s_Quad.lt = s_Quad.lt + offset;
+                        s_Quad.rt = s_Quad.rt + offset;
+                    }
             
-                    vertexInfos.Add(new VertexInfo(new Vector3(v0.x, v0.y, 0), color32, new Vector2(glyphRect.x, glyphRect.y + glyphRect.height), property));
-                    vertexInfos.Add(new VertexInfo(new Vector3(v1.x, v1.y, 0), color32, new Vector2(glyphRect.x, glyphRect.y), property));
-                    vertexInfos.Add(new VertexInfo(new Vector3(v2.x, v2.y, 0), color32, new Vector2(glyphRect.x + glyphRect.width, glyphRect.y), property));
-                    vertexInfos.Add(new VertexInfo(new Vector3(v3.x, v3.y, 0), color32, new Vector2(glyphRect.x + glyphRect.width, glyphRect.y + glyphRect.height), property));
+                    vertexInfos.Add(new VertexInfo(new Vector3(s_Quad.v0.x, s_Quad.v0.y, 0), color32, new Vector2(glyphRect.x, glyphRect.y + glyphRect.height), property));
+                    vertexInfos.Add(new VertexInfo(new Vector3(s_Quad.v1.x, s_Quad.v1.y, 0), color32, new Vector2(glyphRect.x, glyphRect.y), property));
+                    vertexInfos.Add(new VertexInfo(new Vector3(s_Quad.v2.x, s_Quad.v2.y, 0), color32, new Vector2(glyphRect.x + glyphRect.width, glyphRect.y), property));
+                    vertexInfos.Add(new VertexInfo(new Vector3(s_Quad.v3.x, s_Quad.v3.y, 0), color32, new Vector2(glyphRect.x + glyphRect.width, glyphRect.y + glyphRect.height), property));
                     currentPosition = nextPosition;
                     count++;
                 }
